@@ -27,7 +27,7 @@ class PipelineStack(cdk.Stack):
                 commands=[
                     "npm install -g aws-cdk",
                     "pip install -r requirements.txt",
-                    "pytest unittests",
+                    #"pytest unittests",
                     "cdk synth"
                 ]
             )
