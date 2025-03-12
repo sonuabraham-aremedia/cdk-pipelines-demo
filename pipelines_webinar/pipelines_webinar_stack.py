@@ -1,23 +1,27 @@
-from os import path
+import os
+from aws_cdk import (
+    Stack,
+    Duration,
+    aws_lambda as lmb,
+    aws_apigateway as apigw,
+    aws_cloudwatch as cloudwatch,
+    aws_codedeploy as codedeploy,
+    CfnOutput
+)
+from constructs import Construct
 
-from aws_cdk import core
-import aws_cdk.aws_lambda as lmb
-import aws_cdk.aws_apigateway as apigw
-import aws_cdk.aws_codedeploy as codedeploy
-import aws_cdk.aws_cloudwatch as cloudwatch
+class PipelinesWebinarStack(Stack):
 
-class PipelinesWebinarStack(core.Stack):
-
-    def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         # The code that defines your stack goes here
-        this_dir = path.dirname(__file__)
+        this_dir = os.path.dirname(__file__)
 
         handler = lmb.Function(self, 'Handler',
-            runtime=lmb.Runtime.PYTHON_3_7,
+            runtime=lmb.Runtime.PYTHON_3_9,  # Updated to a supported version
             handler='handler.handler',
-            code=lmb.Code.from_asset(path.join(this_dir, 'lambda')))
+            code=lmb.Code.from_asset(os.path.join(this_dir, 'lambda')))
 
         alias = lmb.Alias(self, 'HandlerAlias',
             alias_name='Current',
@@ -31,11 +35,11 @@ class PipelinesWebinarStack(core.Stack):
             metric=cloudwatch.Metric(
                 metric_name='5XXError',
                 namespace='AWS/ApiGateway',
-                dimensions={
+                dimensions_map={
                     'ApiName': 'Gateway',
                 },
                 statistic='Sum',
-                period=core.Duration.minutes(1)),
+                period=Duration.minutes(1)),
             threshold=1,
             evaluation_periods=1)
 
@@ -44,6 +48,5 @@ class PipelinesWebinarStack(core.Stack):
             deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_10_MINUTES,
             alarms=[failure_alarm])
 
-        self.url_output = core.CfnOutput(self, 'Url',
+        self.url_output = CfnOutput(self, 'Url',
             value=gw.url)
-
