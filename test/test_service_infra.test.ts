@@ -1,18 +1,22 @@
-import { App } from '@aws-cdk/core';
-import { PipelinesWebinarStack } from '../pipelines_webinar/pipelines_webinar_stack';
+import { App } from "aws-cdk-lib";
+import { Template } from "aws-cdk-lib/assertions";
+import { PipelinesWebinarStack } from "../pipelines_webinar/pipelines_webinar_stack";
 
-test('Lambda Handler', () => {
+test("Lambda Handler", () => {
   // GIVEN
   const app = new App();
 
   // WHEN
-  new PipelinesWebinarStack(app, 'Stack');
+  const stack = new PipelinesWebinarStack(app, "Stack");
 
-  const template = app.synth().getStackByName('Stack').template['Resources'] as Map<String, any>
-  const functions = Object.entries(template)
-    .filter((resource) => resource[1]['Type'] === 'AWS::Lambda::Function');
+  // Create a CloudFormation template from the synthesized stack
+  const template = Template.fromStack(stack);
+
+  // Find all AWS Lambda function resources in the template
+  const functions = template.findResources("AWS::Lambda::Function");
 
   // THEN
-  expect(functions.length).toEqual(1);
-  expect(functions[0][1].Properties.Handler).toEqual('handler.handler');
+  expect(Object.keys(functions).length).toEqual(1);
+  const functionProperties = Object.values(functions)[0] as any;
+  expect(functionProperties.Properties.Handler).toEqual("handler.handler");
 });

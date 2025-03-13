@@ -1,61 +1,60 @@
-import { Construct, SecretValue, Stack, StackProps } from '@aws-cdk/core';
-import * as cp from '@aws-cdk/aws-codepipeline';
-import * as cpa from '@aws-cdk/aws-codepipeline-actions';
-import * as pipelines from '@aws-cdk/pipelines';
-import { WebServiceStage } from './webservice_stage';
+import { SecretValue, Stack, StackProps } from "aws-cdk-lib";
+import { Construct } from "constructs";
+import * as codepipeline from "aws-cdk-lib/aws-codepipeline";
+import * as codepipelineActions from "aws-cdk-lib/aws-codepipeline-actions";
+import * as pipelines from "aws-cdk-lib/pipelines";
+import { WebServiceStage } from "./webservice_stage";
+import { CodeBuildStep } from "aws-cdk-lib/pipelines";
 
 export class PipelineStack extends Stack {
-    constructor(scope: Construct, id: string, props?: StackProps) {
-        super(scope, id, props);
+  constructor(scope: Construct, id: string, props?: StackProps) {
+    super(scope, id, props);
 
-        const sourceArtifact = new cp.Artifact();
-        const cloudAssemblyArtifact = new cp.Artifact();
+    const sourceArtifact = new codepipeline.Artifact();
+    const cloudAssemblyArtifact = new codepipeline.Artifact();
 
-        const sourceAction = new cpa.GitHubSourceAction({
-            actionName: 'GitHub',
-            output: sourceArtifact,
-            oauthToken: SecretValue.secretsManager('github-token'),
-            owner: 'OWNER',
-            repo: 'REPO',
-        });
+    const sourceAction = new codepipelineActions.GitHubSourceAction({
+      actionName: "GitHub",
+      output: sourceArtifact,
+      oauthToken: SecretValue.secretsManager("github-token"),
+      owner: "sonuabraham-aremedia",
+      repo: "cdk-pipelines-demo",
+      branch: "typescript",
+      trigger: codepipelineActions.GitHubTrigger.POLL,
+    });
 
-        const synthAction = pipelines.SimpleSynthAction.standardNpmSynth({
-            sourceArtifact,
-            cloudAssemblyArtifact,
-            buildCommand: 'npm run build && npm test',
-        });
+    const synthAction = new CodeBuildStep("Synth", {
+      input: pipelines.CodePipelineSource.gitHub(
+        "sonuabraham-aremedia/cdk-pipelines-demo",
+        "typescript",
+        {
+          authentication: SecretValue.secretsManager("github-oauth-token1"),
+        }
+      ),
+      installCommands: ["npm install"],
+      commands: ["npm run build", "npm test"], // Correctly using commands property
+      primaryOutputDirectory: "cdk.out",
+    });
+    const pipeline = new pipelines.CodePipeline(this, "Pipeline", {
+      synth: synthAction,
+    });
 
-        const pipeline = new pipelines.CdkPipeline(this, 'Pipeline', {
-            cloudAssemblyArtifact,
-            sourceAction,
-            synthAction
-        });
+    // Pre-prod
+    const preProdApp = new WebServiceStage(this, "Pre-Prod");
+    const preProdStage = pipeline.addStage(preProdApp);
+    const serviceUrl = preProdApp.urlOutput;
 
-        // Pre-prod
-        //
-        const preProdApp = new WebServiceStage(this, 'Pre-Prod');
-        const preProdStage = pipeline.addApplicationStage(preProdApp);
-        const serviceUrl = pipeline.stackOutput(preProdApp.urlOutput);
+    preProdStage.addPost(
+      new pipelines.ShellStep("IntegrationTests", {
+        commands: ["npm install", "npm run build", "npm run integration"],
+        envFromCfnOutputs: {
+          SERVICE_URL: serviceUrl,
+        },
+      })
+    );
 
-        preProdStage.addActions(new pipelines.ShellScriptAction({
-            actionName: 'IntegrationTests',
-            runOrder: preProdStage.nextSequentialRunOrder(),
-            additionalArtifacts: [
-                sourceArtifact
-            ],
-            commands: [
-                'npm install',
-                'npm run build',
-                'npm run integration'
-            ],
-            useOutputs: {
-                SERVICE_URL: serviceUrl
-            }
-        }));
-
-        // Prod
-        //
-        const prodApp = new WebServiceStage(this, 'Prod');
-        const prodStage = pipeline.addApplicationStage(prodApp);
-    }
+    // Prod
+    const prodApp = new WebServiceStage(this, "Prod");
+    pipeline.addStage(prodApp);
+  }
 }
