@@ -1,9 +1,9 @@
-from aws_cdk import core
+from aws_cdk import App
 from pipelines_webinar.pipelines_webinar_stack import PipelinesWebinarStack
 
 def test_lambda_handler():
   # GIVEN
-  app = core.App()
+  app = App()
 
   # WHEN
   PipelinesWebinarStack(app, 'Stack')
